@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<section name="Workbench">
+	<item key="hasShownOverlayPopupBefore" value="true"/>
+	<item key="replaceBarOpen" value="false"/>
+	<list key="searchhistory">
+		<item value="motor_set"/>
+		<item value="motor_stop"/>
+		<item value="rbg"/>
+		<item value="code begin 2"/>
+		<item value="HAL_UART_Receive(TERM, &amp;c, 1, HAL_MAX_DELAY);"/>
+	</list>
+</section>

@@ -1,0 +1,10 @@
+22:46:01 **** Incremental Build of configuration Debug for project Reservoir ****
+make -j4 all 
+arm-none-eabi-size  Reservoir.elf 
+   text	   data	    bss	    dec	    hex	filename
+  28024	    108	   2388	  30520	   7738	Reservoir.elf
+Finished building: default.size.stdout
+ 
+
+22:46:01 Build Finished. 0 errors, 0 warnings. (took 726ms)
+

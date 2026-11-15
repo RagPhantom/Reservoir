@@ -91,6 +91,7 @@ uint8_t depth_pct 	= 0;
 uint8_t filled = 0;
 
 static const uint8_t duty_table[4] = {0, 70, 85, 99};
+volatile uint16_t last_tick_us = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,7 +120,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t pin) {
-	if (pin == RPM_Tick_Pin) rpm_pulses++;
+	if (pin == RPM_Tick_Pin) {
+		uint16_t now = __HAL_TIM_GET_COUNTER(&htim4);
+		if ((uint16_t)(now - last_tick_us) >= 2000) {   // at least 2 ms between two pulses
+			rpm_pulses++;
+			last_tick_us = now;
+		}
+	}
 	else if (pin == PB_INPUT_Pin) b1_flag = 1;
 }
 
@@ -186,7 +193,8 @@ uint8_t depth_read_pct(void){
 
     uint32_t t0 = HAL_GetTick();
     while (hcsr04_Rx_flag == 0) {
-        if (HAL_GetTick() - t0 > 60) return depth_pct;
+        //if (HAL_GetTick() - t0 > 60) return depth_pct;
+    	if (HAL_GetTick() - t0 > 60) { term_print("  [echo timeout]\r\n"); return depth_pct; }
     }
     uint16_t time_diff = time_edge2 - time_edge1;
     int us_full  = D_FULL_CM  * 58;
@@ -343,8 +351,8 @@ void end_hour(void) {
 	}
 	term_print(line);
 
-    if (cur && cur->id == 0 &&
-        (depth_pct >= FULL_PCT || hour + 1 >= cur->stop_hour)) filled = 1;
+	if (cur && cur->id == 0 &&
+	    (depth_pct >= FULL_PCT || (hour + 1 >= cur->stop_hour && depth_pct > 0))) filled = 1;
 
     if (filled && depth_pct == 0) { special_event(); return; }
 
