@@ -3,6 +3,7 @@
 	<item key="hasShownOverlayPopupBefore" value="true"/>
 	<item key="replaceBarOpen" value="false"/>
 	<list key="searchhistory">
+		<item value="depth_read_p"/>
 		<item value="motor_set"/>
 		<item value="motor_stop"/>
 		<item value="rbg"/>

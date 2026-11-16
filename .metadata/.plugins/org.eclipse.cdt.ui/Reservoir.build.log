@@ -1,10 +1,24 @@
-22:46:01 **** Incremental Build of configuration Debug for project Reservoir ****
+14:54:44 **** Incremental Build of configuration Debug for project Reservoir ****
 make -j4 all 
+arm-none-eabi-gcc "../Core/Src/main.c" -mcpu=cortex-m4 -std=gnu11 -g3 -DDEBUG -DUSE_HAL_DRIVER -DSTM32F401xE -c -I../Core/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc -I../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy -I../Drivers/CMSIS/Device/ST/STM32F4xx/Include -I../Drivers/CMSIS/Include -O0 -ffunction-sections -fdata-sections -Wall -fstack-usage -fcyclomatic-complexity -MMD -MP -MF"Core/Src/main.d" -MT"Core/Src/main.o" --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -o "Core/Src/main.o"
+../Core/Src/main.c: In function 'end_hour':
+../Core/Src/main.c:344:47: warning: 'sprintf' may write a terminating nul past the end of the destination [-Wformat-overflow=]
+  344 |                         sprintf(name, "ZONE %d", cur->id);
+      |                                               ^
+../Core/Src/main.c:344:25: note: 'sprintf' output between 7 and 9 bytes into a destination of size 8
+  344 |                         sprintf(name, "ZONE %d", cur->id);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+arm-none-eabi-gcc -o "Reservoir.elf" @"objects.list"   -mcpu=cortex-m4 -T"N:\ECE-298\Reservoir_Workspace\Reservoir\STM32F401RETX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Reservoir.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Finished building target: Reservoir.elf
+ 
 arm-none-eabi-size  Reservoir.elf 
+arm-none-eabi-objdump -h -S Reservoir.elf  > "Reservoir.list"
    text	   data	    bss	    dec	    hex	filename
-  28024	    108	   2388	  30520	   7738	Reservoir.elf
+  27828	    108	   2388	  30324	   7674	Reservoir.elf
 Finished building: default.size.stdout
  
+Finished building: Reservoir.list
+ 
 
-22:46:01 Build Finished. 0 errors, 0 warnings. (took 726ms)
+14:54:48 Build Finished. 0 errors, 1 warnings. (took 4s.733ms)
 

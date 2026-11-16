@@ -258,16 +258,16 @@ void run_setup(void) {
 	term_print("\r\nSETUP MODE\r\n");
 
 	plan[0].id = 0;
-	plan[0].pwm_option = read_number("INLET PIPELINE PUMP MOTOR PMW (0-3): ", 0, 3);
+	plan[0].pwm_option = read_number("INLET PIPELINE PUMP MOTOR PWM (0-3): ", 0, 3);
 	for (int i = 0; i < 3; i++) {
-		sprintf(p, "%s ZONE CHOIC EFOR IRRIGATION (1-3): ", ord[i]);
+		sprintf(p, "%s ZONE CHOICE FOR IRRIGATION (1-3): ", ord[i]);
 		plan[i + 1].id = read_number(p, 1, 3);
 		sprintf(p, "%s ZONE CHOICE FOR PUMP MOTOR PWM OPTION (1-3): ", ord[i]);
 		plan[i + 1].pwm_option = read_number(p, 1, 3);
 	}
 
 	plan[0].start_hour = read_number("INLET WALL CLOCK START TIME (00-23): ", 0, 23);
-	plan[0].stop_hour = read_number("INLET WALL CLOCK STOP TIME (00-23)", 0, 23);
+	plan[0].stop_hour = read_number("INLET WALL CLOCK STOP TIME (00-23): ", 0, 23);
 	for(int i = 0; i < 3; i++) {
 		sprintf(p, "%s ZONE WALL CLOCK START TIME (00-23): ", ord[i]);
 		plan[i + 1].start_hour = read_number(p, 0, 23);

@@ -50,6 +50,7 @@ typedef enum {
 #define SLOTS_PER_REV 	20
 #define D_FULL_CM		5
 #define D_EMPTY_CM		30
+#define BIT(v, n) (( (v) >> (n)) & 1 ? GPIO_PIN_SET : GPIO_PIN_RESET)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -76,7 +77,7 @@ volatile uint16_t time_edge1	= 0;
 volatile uint16_t time_edge2	= 0;
 volatile uint8_t rcv_intpt_flag	= 0;
 uint8_t byte;
-uint motor_dir = 0xFF;
+uint8_t motor_dir = 0xFF;
 
 Mode mode = SETUP;
 uint8_t hour 	= 0;
@@ -87,9 +88,10 @@ uint8_t cur_duty = 0;
 uint8_t motor_on = 0;
 uint8_t empty_event = 0;
 uint8_t depth_pct 	= 0;
-
+uint8_t filled = 0;
 
 static const uint8_t duty_table[4] = {0, 70, 85, 99};
+volatile uint16_t last_tick_us = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -118,31 +120,121 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t pin) {
-	if (pin == RPM_Tick_Pin) rpm_pulses++;
+	if (pin == RPM_Tick_Pin) {
+		uint16_t now = __HAL_TIM_GET_COUNTER(&htim4);
+		if ((uint16_t)(now - last_tick_us) >= 2000) {   // at least 2 ms between two pulses
+			rpm_pulses++;
+			last_tick_us = now;
+		}
+	}
 	else if (pin == PB_INPUT_Pin) b1_flag = 1;
 }
 
-void motor_set(uint8_t dut, uint8_t reverse){}
 void motor_stop(void){
 	TIM3->CCR1 = 0;
 	TIM3->CCR3 = 0;
 }
-void servo_select(uint8_t id){}
-void rbg_set(uint8_t id){}
-void rbg_off(void){}
-void rbg_white_toggle(void){}
-uint8_t depth_read_pct(void){}
-void display_show(uint8_t pct){}
-uint8_t pot_read_pct(void){}
 
-int read_num(const char *prompt, int min, int max) {
+void motor_set(uint8_t duty, uint8_t reverse){
+	uint32_t ccr = duty * 20;
+	if (reverse != motor_dir) {
+		motor_stop();
+		HAL_Delay(100);
+		motor_dir = reverse;
+	}
+	if (reverse) {
+		TIM3->CCR1 = 0;
+		TIM3->CCR3 = ccr;
+	} else {
+		TIM3->CCR3 = 0;
+		TIM3->CCR1 = ccr;
+	}
+}
+void servo_select(uint8_t id){
+	static const uint16_t pulse[4] = {600, 1200, 1800, 2400};
+    TIM2->CCR1 = pulse[id];
+}
+
+void rgb_write(uint8_t r, uint8_t g, uint8_t b) {
+    HAL_GPIO_WritePin(RED_GPIO_Port, RED_Pin, r ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GRN_GPIO_Port, GRN_Pin, g ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(BLU_GPIO_Port, BLU_Pin, b ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+void rgb_set(uint8_t id){
+    switch (id) {
+    case 0: rgb_write(1, 0, 1); break;   // Inlet = 紫
+    case 1: rgb_write(1, 0, 0); break;   // Zone 1 = 红
+    case 2: rgb_write(0, 1, 0); break;   // Zone 2 = 绿
+    case 3: rgb_write(0, 0, 1); break;   // Zone 3 = 蓝
+    }
+}
+
+void rgb_off(void){
+	rgb_write(0, 0, 0);
+}
+
+void rgb_white_toggle(void){
+    static uint8_t on = 0;
+    on = !on;
+    rgb_write(on, on, on);
+}
+
+void HCSR04_TRIG_PULSE(void) {
+    HAL_GPIO_WritePin(HCSR04_Out_GPIO_Port, HCSR04_Out_Pin, GPIO_PIN_SET);
+    for (volatile int j = 0; j != 15; j = j + 1) {}
+    HAL_GPIO_WritePin(HCSR04_Out_GPIO_Port, HCSR04_Out_Pin, GPIO_PIN_RESET);
+}
+
+uint8_t depth_read_pct(void){
+    hcsr04_Rx_flag = 0;
+    first_edge = 0;
+    HCSR04_TRIG_PULSE();
+
+    uint32_t t0 = HAL_GetTick();
+    while (hcsr04_Rx_flag == 0) {
+        //if (HAL_GetTick() - t0 > 60) return depth_pct;
+    	if (HAL_GetTick() - t0 > 60) { term_print("  [echo timeout]\r\n"); return depth_pct; }
+    }
+    uint16_t time_diff = time_edge2 - time_edge1;
+    int us_full  = D_FULL_CM  * 58;
+    int us_empty = D_EMPTY_CM * 58;
+    int pct = (us_empty - (int)time_diff) * 100 / (us_empty - us_full);
+    if (pct < 0)  pct = 0;
+    if (pct > 99) pct = 99;
+    return (uint8_t)pct;
+}
+
+void display_show(uint8_t pct){
+    uint8_t tens = pct / 10, ones = pct % 10;
+    HAL_GPIO_WritePin(DIGIT_A0_GPIO_Port, DIGIT_A0_Pin, BIT(tens, 0));
+    HAL_GPIO_WritePin(DIGIT_A1_GPIO_Port, DIGIT_A1_Pin, BIT(tens, 1));
+    HAL_GPIO_WritePin(DIGIT_A2_GPIO_Port, DIGIT_A2_Pin, BIT(tens, 2));
+    HAL_GPIO_WritePin(DIGIT_A3_GPIO_Port, DIGIT_A3_Pin, BIT(tens, 3));
+    HAL_GPIO_WritePin(DIGIT_B0_GPIO_Port, DIGIT_B0_Pin, BIT(ones, 0));
+    HAL_GPIO_WritePin(DIGIT_B1_GPIO_Port, DIGIT_B1_Pin, BIT(ones, 1));
+    HAL_GPIO_WritePin(DIGIT_B2_GPIO_Port, DIGIT_B2_Pin, BIT(ones, 2));
+    HAL_GPIO_WritePin(DIGIT_B3_GPIO_Port, DIGIT_B3_Pin, BIT(ones, 3));
+}
+uint8_t pot_read_pct(void){
+	HAL_ADC_Start(&hadc1);
+	HAL_ADC_PollForConversion(&hadc1, 1000);
+	uint32_t v = HAL_ADC_GetValue(&hadc1);
+	HAL_ADC_Stop(&hadc1);
+	return (uint8_t)(v * 100 / 255);
+}
+
+int read_number(const char *prompt, int min, int max) {
 	char buf[4];
 	uint8_t len, c;
 	while (1) {
 		term_print(prompt);
 		len = 0;
 		while (1) {
-			HAL_UART_Receive(TERM, &c, HAL_MAX_DELAY);
+			rcv_intpt_flag = 0;
+			HAL_UART_Receive_IT(TERM, &byte, 1);
+			while (rcv_intpt_flag == 0) {}
+			c = byte;
             if (c == '\r' || c == '\n') { if (len) break; else continue; }
             if (c >= '0' && c <= '9' && len < 3) {
                 buf[len++] = c;
@@ -166,7 +258,7 @@ void run_setup(void) {
 	term_print("\r\nSETUP MODE\r\n");
 
 	plan[0].id = 0;
-	plan[0].pwm_option = read_number("INLET PIPELINE PUMP MOTOR PMW (0-3): ", 0, 3);
+	plan[0].pwm_option = read_number("INLET PIPELINE PUMP MOTOR PWM (0-3): ", 0, 3);
 	for (int i = 0; i < 3; i++) {
 		sprintf(p, "%s ZONE CHOIC EFOR IRRIGATION (1-3): ", ord[i]);
 		plan[i + 1].id = read_number(p, 1, 3);
@@ -175,7 +267,7 @@ void run_setup(void) {
 	}
 
 	plan[0].start_hour = read_number("INLET WALL CLOCK START TIME (00-23): ", 0, 23);
-	plan[0].stop_hour = read_number("INLET WALL CLOCK STOP TIME (00-23)", 0, 23);
+	plan[0].stop_hour = read_number("INLET WALL CLOCK STOP TIME (00-23): ", 0, 23);
 	for(int i = 0; i < 3; i++) {
 		sprintf(p, "%s ZONE WALL CLOCK START TIME (00-23): ", ord[i]);
 		plan[i + 1].start_hour = read_number(p, 0, 23);
@@ -222,6 +314,7 @@ void begin_hour(void) {
 		   motor_on = 0;
 		   cur_duty = 0;
 		   filled = 1;
+		   return;
 	   }
 	   cur_duty = cur->pwm_option ? duty_table[cur->pwm_option] : pot_read_pct();
 	   motor_set(cur_duty, cur->id == 0);
@@ -258,8 +351,8 @@ void end_hour(void) {
 	}
 	term_print(line);
 
-    if (cur && cur->id == 0 &&
-        (depth_pct >= FULL_PCT || hour + 1 >= cur->stop_hour)) filled = 1;
+	if (cur && cur->id == 0 &&
+	    (depth_pct >= FULL_PCT || (hour + 1 >= cur->stop_hour && depth_pct > 0))) filled = 1;
 
     if (filled && depth_pct == 0) { special_event(); return; }
 
@@ -341,6 +434,13 @@ int main(void)
   MX_TIM4_Init();
   MX_TIM5_Init();
   /* USER CODE BEGIN 2 */
+  TIM3->CCR1 = 0;
+  TIM3->CCR3 = 0;
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+  HAL_TIM_Base_Start(&htim4);
+  HAL_TIM_IC_Start_IT(&htim4, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim5);
   /* USER CODE END 2 */
 
@@ -788,6 +888,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(HCSR04_Out_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
